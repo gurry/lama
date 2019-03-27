@@ -5,3 +5,6 @@ authors = ["Gurinder Singh <gurinder.singh@1e.com>"]
 edition = "2018"
 
 [dependencies]
+hyperv_rs = { git = "https://github.com/gurry/hyperv_rs" }
+structopt = "0.2.15"
+quicli = "0.4.0"
