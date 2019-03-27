@@ -238,7 +238,7 @@ dependencies = [
 [[package]]
 name = "hyperv_rs"
 version = "0.1.0"
-source = "git+https://github.com/gurry/hyperv_rs#19097db687bddff9edbf91d87a178c44ff7fb126"
+source = "git+https://github.com/gurry/hyperv_rs#0a8cfab02aee8d0077bed7bf410c82701a3073ef"
 dependencies = [
  "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "powershell_rs 0.1.0 (git+https://github.com/gurry/powershell_rs)",
