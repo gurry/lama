@@ -5,6 +5,11 @@ authors = ["Gurinder Singh <gurinder.singh@1e.com>"]
 edition = "2018"
 
 [dependencies]
-hyperv_rs = { git = "https://github.com/gurry/hyperv_rs" }
 structopt = "0.2.15"
 quicli = "0.4.0"
+powershell_rs = { git = "https://github.com/gurry/powershell_rs"}
+failure = "0.1.4"
+serde = "1.0.84"
+serde_derive = "1.0.84"
+serde_json = "1.0.34"
+uuid = { version = "0.7.1", features = ["serde"] }

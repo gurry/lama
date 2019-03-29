@@ -236,19 +236,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hyperv_rs"
-version = "0.1.0"
-source = "git+https://github.com/gurry/hyperv_rs#7b4e425a87a05bdf93ca38dfae41b362490422c7"
-dependencies = [
- "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "powershell_rs 0.1.0 (git+https://github.com/gurry/powershell_rs)",
- "serde 1.0.89 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.89 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_json 1.0.39 (registry+https://github.com/rust-lang/crates.io-index)",
- "uuid 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "ignore"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -274,9 +261,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "lama"
 version = "0.1.0"
 dependencies = [
- "hyperv_rs 0.1.0 (git+https://github.com/gurry/hyperv_rs)",
+ "failure 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "powershell_rs 0.1.0 (git+https://github.com/gurry/powershell_rs)",
  "quicli 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.89 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.89 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.39 (registry+https://github.com/rust-lang/crates.io-index)",
  "structopt 0.2.15 (registry+https://github.com/rust-lang/crates.io-index)",
+ "uuid 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -673,7 +665,6 @@ dependencies = [
 "checksum globwalk 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "ce5d04da8cf35b507b2cbec92bbf2d5085292d07cd87637994fd437fe1617bbb"
 "checksum heck 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "20564e78d53d2bb135c343b3f47714a56af2061f1c928fdb541dc7b9fdd94205"
 "checksum humantime 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3ca7e5f2e110db35f93b837c81797f3714500b81d517bf20c431b16d3ca4f114"
-"checksum hyperv_rs 0.1.0 (git+https://github.com/gurry/hyperv_rs)" = "<none>"
 "checksum ignore 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)" = "ad03ca67dc12474ecd91fdb94d758cbd20cb4e7a78ebe831df26a9b7511e1162"
 "checksum itoa 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)" = "1306f3464951f30e30d12373d31c79fbd52d236e5e896fd92f96ec7babbbe60b"
 "checksum lazy_static 1.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "bc5729f27f159ddd61f4df6228e827e86643d4d3e7c32183cb30a1c08f604a14"

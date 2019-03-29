@@ -1,7 +1,9 @@
+mod hyperv;
+
 use std::path::PathBuf;
 use structopt::StructOpt;
 use quicli::prelude::*;
-use hyperv_rs::Hyperv;
+use hyperv::Hyperv;
 
 #[derive(Debug, StructOpt)]
 enum Subcommand {
