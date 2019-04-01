@@ -5,6 +5,7 @@ use uuid::Uuid;
 use std::fmt;
 use std::path::Path;
 use std::collections::HashMap;
+use std::io::Read;
 
 pub struct Hyperv;
 
@@ -72,6 +73,36 @@ impl Hyperv {
         Ok(vm)
     }
 
+    pub fn create_switch<S: AsRef<str>>(name: S, switch_type: &SwitchType<S>) -> Result<Uuid> {
+        let name = name.as_ref();
+        if name.is_empty() {
+            return Err(HypervError::new("Empty string is not a legal switch name"));
+        }
+
+        let command = &format!(
+            r#"$ErrorActionPreference = "Stop";
+            $switch = New-VmSwitch -Name "{}" {};
+            $switch.Id.ToString()"#,
+        name,
+        match switch_type {
+            SwitchType::Private => "-SwitchType Private".to_owned(),
+            SwitchType::Internal => "-SwitchType Internal".to_owned(),
+            SwitchType::External(adapter_name) => format!("-SwitchType -NetAdapterName \"{}\"", adapter_name.as_ref()),
+        });
+
+        let mut stdout = Self::spawn_and_wait(&command)?;
+
+        let mut uuid = String::new();
+        stdout.read_to_string(&mut uuid)
+            .map_err(|e| HypervError::new(format!("Failed to parse powershell output: {}", e)))?;
+        let uuid = uuid.trim();
+
+        let switch_id = Uuid::parse_str(uuid)
+            .map_err(|e| HypervError::new(format!("Failed to parse powershell output: {}", e)))?;
+
+        Ok(switch_id)
+    }
+
     fn validate_dir_path(path: &Path) -> Result<&str> {
         if !path.is_dir() {
             Err(HypervError::new("Path does not point to a valid directory"))
@@ -130,6 +161,12 @@ pub struct Vm {
 
 // TODO: should this be a newtype?
 pub type VmId = Uuid;
+
+pub enum SwitchType<A: AsRef<str>> {
+    Private,
+    Internal,
+    External(A)
+}
 
 // TODO: We need to do proper design of error types. Just this one type is not enough
 #[derive(Debug, Fail)]

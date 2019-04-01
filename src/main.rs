@@ -3,7 +3,7 @@ mod hyperv;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use quicli::prelude::*;
-use hyperv::Hyperv;
+use hyperv::{Hyperv, SwitchType};
 
 #[derive(Debug, StructOpt)]
 enum Subcommand {
@@ -19,6 +19,7 @@ fn main() -> CliResult {
     println!("New VM with ID {}", vm.id);
     for s in vm.missing_switches {
         println!("Adapter {}: Switch {}", s.0, s.1);
+        Hyperv::create_switch(s.1, &SwitchType::Private)?;
     }
     Ok(())
 }
