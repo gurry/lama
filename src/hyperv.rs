@@ -12,7 +12,7 @@ pub type Result<T> = std::result::Result<T, HypervError>;
 
 impl Hyperv {
     pub fn get_vms() -> Result<Vec<Vm>> {
-        let process = Self::spawn("get-vm|select-object -property Id,Name |convertto-json")?;
+        let process = Self::spawn(r#"$ErrorActionPreference = "Stop";get-vm|select-object -property Id,Name |convertto-json"#)?;
         let stdout = process.stdout().ok_or_else(|| HypervError::new("Could not access stdout of powershell process"))?;
 
         let vms: Vec<Vm> = serde_json::from_reader(stdout)
