@@ -15,6 +15,10 @@ enum Subcommand {
 
 fn main() -> CliResult {
     let Subcommand::Deploy { path } = Subcommand::from_args();
-    Hyperv::import_vm(&path)?;
+    let vm = Hyperv::import_vm_inplace_new_id(&path)?;
+    println!("New VM with ID {}", vm.id);
+    for s in vm.missing_switches {
+        println!("Adapter {}: Switch {}", s.0, s.1);
+    }
     Ok(())
 }

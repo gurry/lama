@@ -5,6 +5,7 @@ use uuid::Uuid;
 use std::fmt;
 use std::path::Path;
 use std::io::{BufReader, BufRead};
+use std::collections::HashMap;
 
 pub struct Hyperv;
 
@@ -21,13 +22,55 @@ impl Hyperv {
         Ok(vms)
     }
 
-    pub fn import_vm<P: AsRef<Path>>(path: P) -> Result<()> {
-        let path = Self::validate_file_path(path.as_ref())?;
+    pub fn import_vm_inplace_new_id<P: AsRef<Path>>(path: P) -> Result<ImportedVm> {
+        let path = Self::validate_dir_path(path.as_ref())?;
         let command = &format!(
-            "import-vm -Path \"{}\"",
+            r#"$ErrorActionPreference = "Stop";
+            $path = "{}";
+            $virtual_machines_path = $path;
+            $virtual_disks_path = Join-Path $path "Virtual Hard Disks";
+            $config_file_path = Get-ChildItem -Path $virtual_machines_path -Filter *.vmcx -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 | ForEach-Object {{$_.FullName}};
+            $report = Compare-Vm -Path $config_file_path -VirtualMachinePath $virtual_machines_path -VhdDestinationPath $virtual_disks_path -GenerateNewId -Copy;
+
+            if ($null -eq $report) {{
+                Write-Host "Failed to generate compat report";
+                exit 1;
+            }}
+
+            $MissingSwitchMsgId = 33012;
+            $missing_switches = @{{}};
+            foreach ($incompatibilty in $report.Incompatibilities)
+            {{
+                if ($incompatibilty.MessageId -eq $MissingSwitchMsgId)
+                {{
+                    $switch_name = $incompatibilty.Message.TrimStart("Could not find Ethernet switch '").TrimEnd("'.");
+                    $missing_switches[$incompatibilty.Source.Id] = $switch_name;
+                    $incompatibilty.Source |Disconnect-VMNetworkAdapter;
+                }}
+            }}
+
+            $report = Compare-Vm -CompatibilityReport $report;
+            if ($report.Incompatibilities.Length -gt 0) 
+            {{
+                Write-Host "Failed to resolve all incompatilities";
+                exit 2;
+            }}
+
+            $vm = Import-VM -CompatibilityReport $report;
+
+            $output = @{{}};
+            $output.VmId = $vm.Id;
+            $output.MissingSwitches = $missing_switches;
+
+            $output | ConvertTo-Json"#,
         path);
-        Self::spawn_and_wait(command)?;
-        Ok(())
+
+        let stdout = Self::spawn_and_wait(&command)?;
+
+        let vm: ImportedVm = serde_json::from_reader(stdout)
+            .map_err(|e| HypervError::new(format!("Failed to parse powershell output: {}", e)))?;
+
+        Ok(vm)
     }
 
     pub fn compare_vm<P: AsRef<Path>>(path: P, import_type: &ImportType) -> Result<Vec<VmIncompatibility>> {
@@ -84,6 +127,15 @@ impl Hyperv {
         }
     }
 
+    fn validate_dir_path(path: &Path) -> Result<&str> {
+        if !path.is_dir() {
+            Err(HypervError::new("Path does not point to a valid directory"))
+        } else {
+            let path = path.to_str().ok_or_else(|| HypervError { msg: "Bad path".to_owned() })?;
+            Ok(path)
+        }
+    }
+
     fn map_lines<T, F: Fn(&str) -> Result<Option<T>>>(stdout: Stdout, f: F) -> Result<Vec<T>> {
         let mut vec = Vec::new();
         for line in BufReader::new(stdout).lines() {
@@ -102,7 +154,7 @@ impl Hyperv {
 
     fn spawn(command: &str) -> Result<PsProcess> {
         PsCommand::new(command)
-            .stdout(Stdio::piped())
+            .stdout(Stdio::piped()) // TODO: use a tee like mechanism to pipe this to the logger as well when high log level is set
             .spawn()
             .map_err(|e| HypervError::new(format!("Failed to spawn PowerShell process: {}", e)))
     }
@@ -128,6 +180,15 @@ impl Hyperv {
     }
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ImportedVm {
+    #[serde(rename = "VmId")]
+    pub id: VmId,
+
+    #[serde(rename = "MissingSwitches")]
+    pub missing_switches: HashMap<String, String>,
+
+}
 pub enum ImportType<'a, 'b> {
     RegisterInPlace,
     Restore { vhd_path: Option<&'a Path>, virtual_machine_path: Option<&'b Path> },
