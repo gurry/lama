@@ -35,5 +35,17 @@ fn main() -> CliResult {
         println!("Connecting adapter {} to switch {}", adapter_id, switch_id);
         Hyperv::connect_adapter(&vm.id, &adapter_id, &switch_id.to_hyphenated().to_string())?;
     }
+    println!("Starting VM...", );
+    Hyperv::start_vm(&vm.id)?;
+    std::thread::sleep_ms(4000);
+    println!("Stopping VM...", );
+    Hyperv::stop_vm(&vm.id)?;
+    std::thread::sleep_ms(4000);
+    println!("Deleting VM...", );
+    Hyperv::delete_vm(&vm.id)?;
+    println!("Deleting Switches...", );
+    for switch_id in created_switches.values() {
+        Hyperv::delete_switch(&switch_id.to_hyphenated().to_string())?;
+    }
     Ok(())
 }

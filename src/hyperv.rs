@@ -73,6 +73,51 @@ impl Hyperv {
         Ok(vm)
     }
 
+    pub fn start_vm(vm_id: &VmId) -> Result<()> {
+        let command = &format!(
+            r#"$ErrorActionPreference = "Stop";
+            $vm = Get-Vm -Id {0};
+            if ($null -eq $vm) {{
+                Write-Host "Failed to get vm with Id {0}";
+                exit 1;
+            }}
+            Start-VM -VM $vm"#,
+        vm_id);
+
+        Self::spawn_and_wait(&command)?;
+        Ok(())
+    }
+
+    pub fn stop_vm(vm_id: &VmId) -> Result<()> {
+        let command = &format!(
+            r#"$ErrorActionPreference = "Stop";
+            $vm = Get-Vm -Id {0};
+            if ($null -eq $vm) {{
+                Write-Host "Failed to get vm with Id {0}";
+                exit 1;
+            }}
+            Stop-VM -VM $vm -Force"#,
+        vm_id);
+
+        Self::spawn_and_wait(&command)?;
+        Ok(())
+    }
+
+    pub fn delete_vm(vm_id: &VmId) -> Result<()> {
+        let command = &format!(
+            r#"$ErrorActionPreference = "Stop";
+            $vm = Get-Vm -Id {0};
+            if ($null -eq $vm) {{
+                Write-Host "Failed to get vm with Id {0}";
+                exit 1;
+            }}
+            Remove-VM -VM $vm -Force"#,
+        vm_id);
+
+        Self::spawn_and_wait(&command)?;
+        Ok(())
+    }
+
     pub fn create_switch<S: AsRef<str>>(name: S, switch_type: &SwitchType<S>) -> Result<Uuid> {
         let name = name.as_ref();
         if name.is_empty() {
@@ -101,6 +146,21 @@ impl Hyperv {
             .map_err(|e| HypervError::new(format!("Failed to parse powershell output: {}", e)))?;
 
         Ok(switch_id)
+    }
+
+    pub fn delete_switch(switch_id: &str) -> Result<()> {
+        let command = &format!(
+            r#"$ErrorActionPreference = "Stop";
+            $switch = Get-VmSwitch -Id {0};
+            if ($null -eq $switch) {{
+                Write-Host "Failed to get switch with Id {0}";
+                exit 1;
+            }}
+            Remove-VMSwitch -VMSwitch $switch -Force"#,
+        switch_id);
+
+        Self::spawn_and_wait(&command)?;
+        Ok(())
     }
 
     pub fn connect_adapter(vm_id: &VmId, adapter_id: &str, switch_id: &str) -> Result<()> {
