@@ -3,7 +3,7 @@ mod hyperv;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use quicli::prelude::*;
-use hyperv::{Hyperv, SwitchType};
+use hyperv::{Hyperv, SwitchType, RenameAction};
 use std::collections::HashMap;
 
 #[derive(Debug, StructOpt)]
@@ -16,7 +16,7 @@ enum Subcommand {
 
 fn main() -> CliResult {
     let Subcommand::Deploy { path } = Subcommand::from_args();
-    let vm = Hyperv::import_vm_inplace_new_id(&path)?;
+    let vm = Hyperv::import_vm_inplace_new_id(&path, RenameAction::AddPrefix("MyLab".to_owned()))?;
     println!("Imported VM with ID {}", vm.id);
     let mut created_switches = HashMap::new();
     for s in vm.missing_switches {

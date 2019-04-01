@@ -22,7 +22,14 @@ impl Hyperv {
         Ok(vms)
     }
 
-    pub fn import_vm_inplace_new_id<P: AsRef<Path>>(path: P) -> Result<ImportedVm> {
+    pub fn import_vm_inplace_new_id<P: AsRef<Path>, R: Into<Option<RenameAction>>>(path: P, rename_action: R) -> Result<ImportedVm> {
+        let rename_action = rename_action.into();
+        let (prefix, new_name) = match rename_action {
+            None => ("".to_owned(), "".to_owned()),
+            Some(RenameAction::NewName(n)) => ("".to_owned(), n),
+            Some(RenameAction::AddPrefix(p)) => (p, "".to_owned()),
+        };
+
         let path = Self::validate_dir_path(path.as_ref())?;
         let command = &format!(
             r#"$ErrorActionPreference = "Stop";
@@ -58,12 +65,30 @@ impl Hyperv {
 
             $vm = Import-VM -CompatibilityReport $report;
 
+            if ($null -eq $vm) {{
+                Write-Host "Failed to import VM";
+                exit 3;
+            }}
+
+            $prefix = "{}";
+            $new_name = "{}";
+
+            if (($null -ne $prefix) -and ($prefix -ne "")) {{
+                $new_name = $prefix + "_" + $vm.Name;
+            }}
+
+            if (($null -ne $new_name) -and ($new_name -ne "")) {{
+                Rename-VM -VM $vm -NewName $new_name;
+            }}
+
             $output = @{{}};
             $output.VmId = $vm.Id;
             $output.MissingSwitches = $missing_switches;
 
             $output | ConvertTo-Json"#,
-        path);
+        path,
+        prefix,
+        new_name);
 
         let stdout = Self::spawn_and_wait(&command)?;
 
@@ -250,10 +275,15 @@ pub struct Vm {
 // TODO: should this be a newtype?
 pub type VmId = Uuid;
 
-pub enum SwitchType<A: AsRef<str>> {
+pub enum SwitchType<S: AsRef<str>> {
     Private,
     Internal,
-    External(A)
+    External(S),
+}
+
+pub enum RenameAction {
+    NewName(String), // TODO; can we find a way to use &str here instead of String
+    AddPrefix(String),
 }
 
 // TODO: We need to do proper design of error types. Just this one type is not enough
