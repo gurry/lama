@@ -103,6 +103,34 @@ impl Hyperv {
         Ok(switch_id)
     }
 
+    pub fn connect_adapter(vm_id: &VmId, adapter_id: &str, switch_id: &str) -> Result<()> {
+        let command = &format!(
+            r#"$ErrorActionPreference = "Stop";
+            $vm = Get-Vm -Id {0};
+            if ($null -eq $vm) {{
+                Write-Host "Failed to get vm with Id {0}";
+                exit 1;
+            }}
+            $adapter = $vm.NetworkAdapters | Where-Object {{ $_.Id -eq "{1}"}} | Select-Object -First 1;
+            if ($null -eq $adapter) {{
+                Write-Host "Failed to get vm adapter with Id {1}";
+                exit 2;
+            }}
+            $switch = Get-VmSwitch -Id {2};
+            if ($null -eq $switch) {{
+                Write-Host "Failed to get switch with Id {2}";
+                exit 3;
+            }}
+
+            Connect-VMNetworkAdapter -VMNetworkAdapter $adapter -VMSwitch $switch"#,
+        vm_id,
+        adapter_id,
+        switch_id);
+
+        Self::spawn_and_wait(&command)?;
+        Ok(())
+    }
+
     fn validate_dir_path(path: &Path) -> Result<&str> {
         if !path.is_dir() {
             Err(HypervError::new("Path does not point to a valid directory"))
