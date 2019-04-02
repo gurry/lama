@@ -30,6 +30,7 @@ impl Hyperv {
             Some(RenameAction::AddPrefix(p)) => (p, "".to_owned()),
         };
 
+        // TODO: add powershell statements in the command below to delete old config files and folders
         let path = Self::validate_dir_path(path.as_ref())?;
         let command = &format!(
             r#"$ErrorActionPreference = "Stop";
