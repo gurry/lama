@@ -83,6 +83,7 @@ impl Hyperv {
 
             $output = @{{}};
             $output.VmId = $vm.Id;
+            $output.VmName = $vm.Name;
             $output.MissingSwitches = $missing_switches;
 
             $output | ConvertTo-Json"#,
@@ -258,7 +259,8 @@ impl Hyperv {
 pub struct ImportedVm {
     #[serde(rename = "VmId")]
     pub id: VmId,
-
+    #[serde(rename = "VmName")]
+    pub name: String,
     #[serde(rename = "MissingSwitches")]
     pub missing_switches: HashMap<String, String>,
 

@@ -17,7 +17,7 @@ enum Subcommand {
 fn main() -> CliResult {
     let Subcommand::Deploy { path } = Subcommand::from_args();
     let vm = Hyperv::import_vm_inplace_new_id(&path, RenameAction::AddPrefix("MyLab".to_owned()))?;
-    println!("Imported VM with ID {}", vm.id);
+    println!("Imported VM with ID {} and name {}", vm.id, vm.name);
     let mut created_switches = HashMap::new();
     for s in vm.missing_switches {
         let adapter_id = s.0;
