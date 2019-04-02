@@ -19,10 +19,11 @@ fn main() -> CliResult {
     let vm = Hyperv::import_vm_inplace_new_id(&path, RenameAction::AddPrefix("MyLab".to_owned()))?;
     println!("Imported VM with ID {} and name {}", vm.id, vm.name);
     let mut created_switches = HashMap::new();
-    for s in vm.missing_switches {
+    for s in vm.adapter_status {
         let adapter_id = s.0;
-        let switch_name = s.1;
-        println!("Missing Connection: Adapter {}, Switch {}", adapter_id, switch_name);
+        let switch_name = s.1.name;
+        let switch_missing = s.1.is_missing;
+        println!("Connection: Adapter {}, Switch {}, Switch missing: {}", adapter_id, switch_name, switch_missing);
         let switch_id = if !created_switches.contains_key(&switch_name) {
             let switch_id = Hyperv::create_switch(&switch_name, &SwitchType::Private)?;
             println!("Created switch {}: {}", switch_name, switch_id);

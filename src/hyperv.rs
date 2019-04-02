@@ -46,13 +46,13 @@ impl Hyperv {
             }}
 
             $MissingSwitchMsgId = 33012;
-            $missing_switches = @{{}};
+            $adapter_status = @{{}};
             foreach ($incompatibilty in $report.Incompatibilities)
             {{
                 if ($incompatibilty.MessageId -eq $MissingSwitchMsgId)
                 {{
                     $switch_name = $incompatibilty.Message.TrimStart("Could not find Ethernet switch '").TrimEnd("'.");
-                    $missing_switches[$incompatibilty.Source.Id] = $switch_name;
+                    $adapter_status[$incompatibilty.Source.Id] = @{{ Name =  $switch_name; IsMissing = $true }};
                     $incompatibilty.Source |Disconnect-VMNetworkAdapter;
                 }}
             }}
@@ -82,10 +82,17 @@ impl Hyperv {
                 Rename-VM -VM $vm -NewName $new_name;
             }}
 
+            foreach ($adapter in $vm.NetworkAdapters) {{
+                $switch_name = $adapter.SwitchName;
+                if (($null -ne $switch_name) -and ("" -ne $switch_name)) {{
+                    $adapter_status[$adapter.Id] =  @{{ Name =  $switch_name; IsMissing = $false }};
+                }}
+            }}
+
             $output = @{{}};
             $output.VmId = $vm.Id;
             $output.VmName = $vm.Name;
-            $output.MissingSwitches = $missing_switches;
+            $output.AdapterStatus = $adapter_status;
 
             $output | ConvertTo-Json"#,
         path,
@@ -262,9 +269,16 @@ pub struct ImportedVm {
     pub id: VmId,
     #[serde(rename = "VmName")]
     pub name: String,
-    #[serde(rename = "MissingSwitches")]
-    pub missing_switches: HashMap<String, String>,
+    #[serde(rename = "AdapterStatus")]
+    pub adapter_status: HashMap<String, SwitchStatus>,
+}
 
+#[derive(Debug, Deserialize)]
+pub struct SwitchStatus {
+    #[serde(rename = "Name")]
+    pub name: String,
+    #[serde(rename = "IsMissing")]
+    pub is_missing: bool,
 }
 
 #[derive(Debug, Deserialize)]
