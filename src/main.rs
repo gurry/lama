@@ -8,7 +8,9 @@ use std::collections::HashMap;
 use std::path::Path;
 use exitfailure::ExitFailure;
 use std::fs;
+use std::fmt;
 use uuid::Uuid;
+use failure::Fail;
 
 #[derive(Debug, StructOpt)]
 enum Subcommand {
@@ -77,7 +79,11 @@ fn contains_vmcx_file(path: &Path) -> Result<bool, ExitFailure> {
 
 fn import_vm<P: AsRef<Path>>(path: P, created_switches: &mut HashMap<String, Uuid>) -> Result<ImportedVm, ExitFailure> {
     let path = path.as_ref();
-    let vm_folder_name = path.file_name().expect("Bad VM folder name").to_str().expect("Couldn't convert VM folder name to str");  // TODO: replace the expect with an error
+    let vm_folder_name = path.file_name()
+        .ok_or_else(|| LamaError::new("Bad VM folder name"))?
+        .to_str()
+        .ok_or_else(|| LamaError::new("Couldn't convert VM folder name to str"))?;
+
     print!("Importing VM {}... ", vm_folder_name);
     let vm = Hyperv::import_vm_inplace_new_id(&path, None)?;
     println!("Done (ID: {})", vm.id);
@@ -104,4 +110,19 @@ fn import_vm<P: AsRef<Path>>(path: P, created_switches: &mut HashMap<String, Uui
     println!("Done");
 
     Ok(vm)
+}
+
+#[derive(Debug, Fail)]
+pub struct LamaError(String);
+
+impl LamaError {
+    fn new<T: Into<String>>(msg: T) -> Self {
+        Self(msg.into())
+    }
+}
+
+impl fmt::Display for LamaError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }
