@@ -11,6 +11,8 @@ use std::fs;
 use std::fmt;
 use uuid::Uuid;
 use failure::Fail;
+use fs_extra::{copy_items_with_progress, dir::{CopyOptions, TransitProcessResult}};
+use pbr::ProgressBar;
 
 #[derive(Debug, StructOpt)]
 enum Subcommand {
@@ -22,7 +24,35 @@ enum Subcommand {
 
 fn main() -> CliResult {
     let Subcommand::Deploy { path } = Subcommand::from_args();
-    import_lab(path)?;
+    let mut lab_path = path;
+    if is_remote_path(&lab_path)? {
+        println!("Cannot deploy from a network location. Copying lab locally first...");
+        copy_lab(&lab_path, ".")?;
+        lab_path = PathBuf::from(".");
+    }
+    import_lab(lab_path)?;
+    Ok(())
+}
+
+fn copy_lab<S: AsRef<Path>, D: AsRef<Path>>(source_path: S, dest_path: D) -> CliResult {
+    let count = 100;
+    let mut pb = ProgressBar::new(count);
+    pb.show_counter = false;
+    pb.show_speed = false;
+    pb.format("[=>-]");
+
+    let options = CopyOptions::new(); //Use default values for CopyOptions
+    let mut from_paths = Vec::new();
+    from_paths.push(source_path);
+    let _bytes = copy_items_with_progress(&from_paths, dest_path, &options, |process_info| {
+        pb.total = process_info.total_bytes;
+        pb.set(process_info.copied_bytes);
+        if process_info.copied_bytes == process_info.total_bytes {
+            pb.finish_print("done");
+        }
+
+        TransitProcessResult::ContinueOrAbort
+    })?;
     Ok(())
 }
 
@@ -110,6 +140,12 @@ fn import_vm<P: AsRef<Path>>(path: P, created_switches: &mut HashMap<String, Uui
     println!("Done");
 
     Ok(vm)
+}
+
+fn is_remote_path(path: &Path) -> Result<bool, ExitFailure> {
+    Ok(path.to_str()
+        .ok_or_else(|| LamaError::new("Cannot convert path to str"))?
+        .starts_with("\\\\")) // TODO: also check for other path formats like "file:// etc."
 }
 
 #[derive(Debug, Fail)]
