@@ -106,9 +106,22 @@ fn import_lab<P: AsRef<Path>>(path: P) -> CliResult {
         println!("");
     }
 
+    let mut imported_vm_ids = Vec::new();
     for vm_path in &vm_paths {
-        import_vm(vm_path, &mut created_switches)?;
+        let vm = import_vm(vm_path, &mut created_switches)?;
+        imported_vm_ids.push(vm.id);
     }
+
+    let lama_config_folder_path = path.as_ref().join(".lama");
+
+    if !dir_exists(&lama_config_folder_path) {
+        fs::create_dir_all(&lama_config_folder_path)?;
+    }
+
+    let mut switches_file = fs::File::create(lama_config_folder_path.join("switches.json"))?;
+    serde_json::to_writer(&mut switches_file, &created_switches)?;
+    let mut switches_file = fs::File::create(lama_config_folder_path.join("vms.json"))?;
+    serde_json::to_writer(&mut switches_file, &imported_vm_ids)?;
 
     println!("Lab deployed successfully");
     Ok(())
