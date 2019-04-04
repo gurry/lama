@@ -26,11 +26,21 @@ enum Subcommand {
 fn main() -> CliResult {
     let Subcommand::Deploy { path } = Subcommand::from_args();
     let mut lab_path = path;
+
+    let lab_folder_name = lab_path.file_name();
+
+    const YES_CHOICE: &str = "Y";
+    const NO_CHOICE: &str = "N";
+    if lab_folder_name.is_none() {
+        let prompt = format!("'{}' does not seem to be a valid lab path. Are you sure you want to deploy from here? [{}] Yes [{}] No: ", lab_path.display(), YES_CHOICE, NO_CHOICE);
+        if prompt_user(prompt.as_str())?.as_str() != YES_CHOICE {
+            return Ok(());
+        }
+    }
+
     if is_remote_path(&lab_path)? {
         println!("Cannot deploy from network location. Do you want me to copy the lab locally first and deploy from there?");
-        const YES_CHOICE: &str = "Y";
         const DIFFERENT_LOC_CHOICE: &str = "D";
-        const NO_CHOICE: &str = "N";
         let dest_path: PathBuf = match prompt_user(&format!("[{}] Copy to current directory [{}] Copy to a different location [{}] Abort: ", YES_CHOICE, DIFFERENT_LOC_CHOICE, NO_CHOICE))?.to_uppercase().as_str() {
             YES_CHOICE => ".".to_owned(),
             DIFFERENT_LOC_CHOICE => {
@@ -42,17 +52,23 @@ fn main() -> CliResult {
             }
         }.into();
 
-        let dest_path_str = dest_path.to_str().ok_or_else(|| LamaError::new("Could not convert path to str"))?;
         if !dest_path.exists() {
             fs::create_dir_all(&dest_path)?;
-            println!("Created directory {}", dest_path_str);
+            println!("Created directory {}", dest_path.display());
         } else if !dest_path.is_dir() {
             return Err(LamaError::new("Path exists but is not a directory"))?;
         }
 
-        println!("Copying to {}...", if dest_path_str == "." { "current directory" } else { dest_path_str });
+        let full_dest_path = match lab_folder_name {
+            Some(folder_name) => PathBuf::from(&dest_path).join(folder_name),
+            None => PathBuf::from(&dest_path),
+        };
+        println!("Copying to {}...", full_dest_path.display());
         copy_lab(&lab_path, &dest_path)?;
-        lab_path = dest_path.into();
+        lab_path = match lab_folder_name {
+            Some(folder_name) => PathBuf::from(dest_path).join(folder_name),
+            None => PathBuf::from(dest_path),
+        };
     }
     import_lab(lab_path)?;
     Ok(())
