@@ -70,6 +70,7 @@ fn main() -> CliResult {
             None => PathBuf::from(dest_path),
         };
     }
+    // TOOD: for non-remote lab paths make sure that lab is not already deployed
     import_lab(lab_path)?;
     Ok(())
 }
