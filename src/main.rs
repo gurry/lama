@@ -52,7 +52,7 @@ fn main() -> CliResult {
             }
         }.into();
 
-        if !dest_path.exists() || !dest_path.is_dir() {
+        if !dir_exists(&dest_path) {
             fs::create_dir_all(&dest_path)?;
             println!("Created directory {}", dest_path.display());
         } 
@@ -199,6 +199,10 @@ pub fn prompt_user(prompt: &str) -> Result<String, ExitFailure> {
     let mut input = String::new();
     stdin().read_line(&mut input)?;
     Ok(input.trim().to_owned())
+}
+
+pub fn dir_exists(path: &Path) -> bool {
+    path.exists() && path.is_dir()
 }
 
 #[derive(Debug, Fail)]
