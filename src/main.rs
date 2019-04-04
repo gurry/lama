@@ -52,12 +52,10 @@ fn main() -> CliResult {
             }
         }.into();
 
-        if !dest_path.exists() {
+        if !dest_path.exists() || !dest_path.is_dir() {
             fs::create_dir_all(&dest_path)?;
             println!("Created directory {}", dest_path.display());
-        } else if !dest_path.is_dir() {
-            return Err(LamaError::new("Path exists but is not a directory"))?;
-        }
+        } 
 
         let full_dest_path = match lab_folder_name {
             Some(folder_name) => PathBuf::from(&dest_path).join(folder_name),
