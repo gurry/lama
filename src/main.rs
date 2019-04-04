@@ -5,7 +5,7 @@ use structopt::StructOpt;
 use quicli::prelude::*;
 use hyperv::{Hyperv, SwitchType, ImportedVm};
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, Component, Prefix};
 use exitfailure::ExitFailure;
 use std::fs;
 use std::fmt;
@@ -167,9 +167,15 @@ fn import_vm<P: AsRef<Path>>(path: P, created_switches: &mut HashMap<String, Uui
 }
 
 fn is_remote_path(path: &Path) -> Result<bool, ExitFailure> {
-    Ok(path.to_str()
-        .ok_or_else(|| LamaError::new("Cannot convert path to str"))?
-        .starts_with("\\\\")) // TODO: also check for other path formats like "file:// etc."
+    let res = match path.components().next() {
+        Some(Component::Prefix(prefix_component)) => match prefix_component.kind() {
+            Prefix::UNC(_, _) | Prefix::VerbatimUNC(_, _) => true, // TODO: also cater for network paths that point to localhost or 127.0.0.x
+            _ => false,
+        },
+        _ => false,
+    };
+
+    Ok(res)
 }
 
 pub fn prompt_user(prompt: &str) -> Result<String, ExitFailure> {
