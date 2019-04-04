@@ -9,6 +9,7 @@ use std::path::Path;
 use exitfailure::ExitFailure;
 use std::fs;
 use std::fmt;
+use std::io::{stdin, stdout, Write};
 use uuid::Uuid;
 use failure::Fail;
 use fs_extra::{copy_items_with_progress, dir::{CopyOptions, TransitProcessResult}};
@@ -26,9 +27,32 @@ fn main() -> CliResult {
     let Subcommand::Deploy { path } = Subcommand::from_args();
     let mut lab_path = path;
     if is_remote_path(&lab_path)? {
-        println!("Cannot deploy from a network location. Copying lab locally first...");
-        copy_lab(&lab_path, ".")?;
-        lab_path = PathBuf::from(".");
+        println!("Cannot deploy from network location. Do you want me to copy the lab locally first and deploy from there?");
+        const YES_CHOICE: &str = "Y";
+        const DIFFERENT_LOC_CHOICE: &str = "D";
+        const NO_CHOICE: &str = "N";
+        let dest_path: PathBuf = match prompt_user(&format!("[{}] Copy to current directory [{}] Copy to a different location [{}] Abort: ", YES_CHOICE, DIFFERENT_LOC_CHOICE, NO_CHOICE))?.to_uppercase().as_str() {
+            YES_CHOICE => ".".to_owned(),
+            DIFFERENT_LOC_CHOICE => {
+                prompt_user("Enter path (will be created if missing): ")?
+            }
+            NO_CHOICE => return Ok(()),
+            _ => {
+                return Err(LamaError::new("Invalid choice"))?;
+            }
+        }.into();
+
+        let dest_path_str = dest_path.to_str().ok_or_else(|| LamaError::new("Could not convert path to str"))?;
+        if !dest_path.exists() {
+            fs::create_dir_all(&dest_path)?;
+            println!("Created directory {}", dest_path_str);
+        } else if !dest_path.is_dir() {
+            return Err(LamaError::new("Path exists but is not a directory"))?;
+        }
+
+        println!("Copying to {}...", if dest_path_str == "." { "current directory" } else { dest_path_str });
+        copy_lab(&lab_path, &dest_path)?;
+        lab_path = dest_path.into();
     }
     import_lab(lab_path)?;
     Ok(())
@@ -146,6 +170,14 @@ fn is_remote_path(path: &Path) -> Result<bool, ExitFailure> {
     Ok(path.to_str()
         .ok_or_else(|| LamaError::new("Cannot convert path to str"))?
         .starts_with("\\\\")) // TODO: also check for other path formats like "file:// etc."
+}
+
+pub fn prompt_user(prompt: &str) -> Result<String, ExitFailure> {
+    print!("{}", prompt);
+    let _= stdout().flush()?;
+    let mut input = String::new();
+    stdin().read_line(&mut input)?;
+    Ok(input.trim().to_owned())
 }
 
 #[derive(Debug, Fail)]
