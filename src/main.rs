@@ -1,5 +1,6 @@
 mod hyperv;
 
+use crate::hyperv::VmId;
 use std::path::PathBuf;
 use structopt::StructOpt;
 use quicli::prelude::*;
@@ -12,20 +13,30 @@ use std::fmt;
 use std::io::{stdin, stdout, Write};
 use uuid::Uuid;
 use failure::Fail;
-use fs_extra::{copy_items_with_progress, dir::{CopyOptions, TransitProcessResult}};
+use fs_extra::{copy_items_with_progress, copy_items, dir::{CopyOptions, TransitProcessResult}};
 use pbr::ProgressBar;
 
 #[derive(Debug, StructOpt)]
 enum Subcommand {
     #[structopt(name = "deploy")]
-    Deploy {
-        path: PathBuf
-    },
+    Deploy { path: PathBuf },
+    #[structopt(name = "drop")]
+    Delete { path: PathBuf },
 }
 
 fn main() -> CliResult {
-    let Subcommand::Deploy { path } = Subcommand::from_args();
-    let mut lab_path = path;
+    match Subcommand::from_args() {
+        Subcommand::Deploy { path } => deploy_lab(path)?,
+        Subcommand::Delete { path } => delete_lab(path)?,
+    }
+    
+    Ok(())
+}
+
+fn deploy_lab(mut lab_path: PathBuf) -> CliResult {
+    if !lab_path.is_dir() {
+        return Err(LamaError::new(format!("Path '{}' does not exist", lab_path.display())))?;
+    }
 
     let lab_folder_name = lab_path.file_name();
 
@@ -52,7 +63,7 @@ fn main() -> CliResult {
             }
         }.into();
 
-        if !dir_exists(&dest_path) {
+        if !dest_path.is_dir() {
             fs::create_dir_all(&dest_path)?;
             println!("Created directory {}", dest_path.display());
         } 
@@ -68,8 +79,56 @@ fn main() -> CliResult {
             None => PathBuf::from(dest_path),
         };
     }
+
     // TOOD: for non-remote lab paths make sure that lab is not already deployed
     import_lab(lab_path)?;
+    Ok(())
+}
+
+fn delete_lab<P: AsRef<Path>>(path: P) -> CliResult {
+    let lab_path = path.as_ref();
+    if !lab_path.is_dir() {
+        return Err(LamaError::new(format!("Path '{}' does not exist", lab_path.display())))?;
+    }
+
+    for vm_path in get_vm_paths(lab_path)? {
+        let vm_id = get_vm_id(&vm_path)?;
+        if let Some(vm_id) = vm_id {
+            println!("==> Stopping VM {}... ", vm_id);
+            Hyperv::stop_vm(&vm_id)?;
+            print!("==> Deleting VM {}... ", vm_id);
+            back_up_vm_config(&vm_path)?; // Save the VM config files because delete-vm will delete them
+            if Hyperv::delete_vm(&vm_id)? {
+                println!("deleted");
+            } else {
+                println!("not found");
+            }
+            restore_vm_config(&vm_path)?; // Restore the backed up config files now
+        }
+    }
+
+    // Delete switches if .lama/switches.json file is present
+    let lama_dir_path = lab_path.join(".lama");
+    let switches_file_path = lama_dir_path.join("switches.json");
+    if switches_file_path.is_file() {
+        let mut switches_file = fs::File::open(&switches_file_path)?;
+        let switches: HashMap<String, Uuid> = serde_json::from_reader(&mut switches_file)?;
+
+        for switch_name in switches.keys() {
+            // TODO: check if the switch is connected to any VM an don't delete it if it is
+            print!("==> Deleting switch {}... ", switch_name);
+            let switch_id = switches[switch_name];
+            if Hyperv::delete_switch(&switch_id.to_hyphenated().to_string())? {
+                println!("deleted");
+            } else {
+                println!("not found");
+            }
+        }
+
+        // TODO: write the new switches file here based on switches being used just before the 'drop'
+        // so that next time 'deploy' is called the same envionrment as now is recreated.
+    }
+
     Ok(())
 }
 
@@ -106,22 +165,18 @@ fn import_lab<P: AsRef<Path>>(path: P) -> CliResult {
         println!("");
     }
 
-    let mut imported_vm_ids = Vec::new();
     for vm_path in &vm_paths {
-        let vm = import_vm(vm_path, &mut created_switches)?;
-        imported_vm_ids.push(vm.id);
+        import_vm(vm_path, &mut created_switches)?;
     }
 
     let lama_config_folder_path = path.as_ref().join(".lama");
 
-    if !dir_exists(&lama_config_folder_path) {
+    if !lama_config_folder_path.is_dir() {
         fs::create_dir_all(&lama_config_folder_path)?;
     }
 
     let mut switches_file = fs::File::create(lama_config_folder_path.join("switches.json"))?;
     serde_json::to_writer(&mut switches_file, &created_switches)?;
-    let mut switches_file = fs::File::create(lama_config_folder_path.join("vms.json"))?;
-    serde_json::to_writer(&mut switches_file, &imported_vm_ids)?;
 
     println!("Lab deployed successfully");
     Ok(())
@@ -130,17 +185,48 @@ fn import_lab<P: AsRef<Path>>(path: P) -> CliResult {
 fn get_vm_paths<P: AsRef<Path>>(path: P) -> Result<Vec<PathBuf>, ExitFailure> {
     let mut vm_paths = Vec::new();
     for entry in fs::read_dir(path)? {
-        let path = entry?.path();
-        if path.is_dir() && contains_vmcx_file(&path)? {
-            vm_paths.push(path);
+        let vm_path = entry?.path();
+        if vm_path.is_dir() {
+            if has_vmcx_file(&vm_path)? {
+                 vm_paths.push(vm_path);
+            }
         }
     }
+
     Ok(vm_paths)
 }
 
-fn contains_vmcx_file(path: &Path) -> Result<bool, ExitFailure> {
+fn get_vm_id<P: AsRef<Path>>(path: P) -> Result<Option<VmId>, ExitFailure> {
+    let vmcx_path = get_single_vmcx_file_path(path.as_ref())?;
+    let vm_id = match vmcx_path.map(|p| p.file_stem().map(|p| p.to_str().map(|p| VmId::parse_str(p).ok()))) {
+        Some(Some(Some(opt))) => opt,
+        _ => None
+    };
+
+    Ok(vm_id)
+}
+
+fn has_vmcx_file(vm_dir: &Path) -> Result<bool, ExitFailure> {
+    Ok(get_single_vmcx_file_path(&vm_dir)?.is_some())
+}
+
+// Returns error or there are more than one vcmx files
+fn get_single_vmcx_file_path(vm_dir: &Path) -> Result<Option<PathBuf>, ExitFailure> {
+    let mut paths = get_vmcx_file_paths(vm_dir)?;
+    if paths.len() > 1 {
+        Err(LamaError::new("More than one .vmcx files found".to_owned()))?
+    } else if paths.len() == 1 {
+        let path = paths.remove(0); // Must remove first because otherwise we upset the borrowck
+        Ok(Some(path))
+    } else {
+        Ok(None)
+    }
+}
+
+fn get_vmcx_file_paths(vm_dir: &Path) -> Result<Vec<PathBuf>, ExitFailure> {
     // We don't check path is a directory. We just assume it is.
-    let vm_config_dir = path.join("Virtual Machines");
+    let vm_config_dir = vm_dir.join("Virtual Machines");
+    let mut vmcx_paths = Vec::new();
     if vm_config_dir.exists() {
         for entry in fs::read_dir(vm_config_dir)? {
             let path = entry?.path();
@@ -148,7 +234,7 @@ fn contains_vmcx_file(path: &Path) -> Result<bool, ExitFailure> {
                 if let Some(ext) = path.extension() {
                     if let Some(ext) = ext.to_str() {
                         if ext.to_lowercase() == "vmcx" {
-                            return Ok(true)
+                            vmcx_paths.push(path);
                         }
                     }
                 }
@@ -156,7 +242,57 @@ fn contains_vmcx_file(path: &Path) -> Result<bool, ExitFailure> {
         }
     }
 
-    Ok(false)
+    Ok(vmcx_paths)
+}
+
+fn back_up_vm_config(vm_dir: &Path) -> Result<(), ExitFailure> {
+    let lama_dir = vm_dir.join(".lama");
+    let vm_config_dir = vm_dir.join("Virtual Machines");
+    copy_dir_contents(&vm_config_dir, &lama_dir)?;
+    Ok(())
+}
+
+fn restore_vm_config(vm_dir: &Path) -> Result<(), ExitFailure> {
+    let lama_dir = vm_dir.join(".lama");
+    let vm_config_dir = vm_dir.join("Virtual Machines");
+    copy_dir_contents(&lama_dir, &vm_config_dir)?;
+    fs::remove_dir_all(&lama_dir)?;
+    Ok(())
+}
+
+fn copy_dir_contents(src_dir: &Path, dest_dir: &Path) -> Result<(), ExitFailure> {
+    if src_dir.is_dir() {
+        if dest_dir.is_dir() {
+            remove_dir_contents(&dest_dir)?; // Just to remove any pre-existing junk
+        } else {
+            fs::create_dir(&dest_dir)?;
+        }
+
+        let mut src_paths = Vec::new();
+        for entry in fs::read_dir(&src_dir)? {
+            src_paths.push(entry?.path());
+        }
+
+        let options = CopyOptions::new(); //Use default values for CopyOptions
+        copy_items(&src_paths, &dest_dir, &options)?;
+    }
+
+    Ok(())
+}
+
+fn remove_dir_contents(dir: &Path) -> Result<(), ExitFailure> {
+    if dir.exists() {
+        for entry in fs::read_dir(dir)? {
+            let path = entry?.path();
+            if path.is_dir() {
+                fs::remove_dir_all(path)?;
+            } else if path.is_file() {
+                fs::remove_file(path)?;
+            }
+        }
+    }
+
+    Ok(())
 }
 
 fn import_vm<P: AsRef<Path>>(path: P, created_switches: &mut HashMap<String, Uuid>) -> Result<ImportedVm, ExitFailure> {
@@ -165,7 +301,7 @@ fn import_vm<P: AsRef<Path>>(path: P, created_switches: &mut HashMap<String, Uui
         .ok_or_else(|| LamaError::new("Bad VM folder name"))?
         .to_str()
         .ok_or_else(|| LamaError::new("Couldn't convert VM folder name to str"))?;
-
+ 
     print!("Importing VM {}... ", vm_folder_name);
     let vm = Hyperv::import_vm_inplace_new_id(&path, None)?;
     println!("Done (ID: {})", vm.id);
@@ -214,9 +350,6 @@ pub fn prompt_user(prompt: &str) -> Result<String, ExitFailure> {
     Ok(input.trim().to_owned())
 }
 
-pub fn dir_exists(path: &Path) -> bool {
-    path.exists() && path.is_dir()
-}
 
 #[derive(Debug, Fail)]
 pub struct LamaError(String);
