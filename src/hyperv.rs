@@ -111,49 +111,64 @@ impl Hyperv {
         Ok(vm)
     }
 
-    pub fn start_vm(vm_id: &VmId) -> Result<()> {
+    pub fn start_vm(vm_id: &VmId) -> Result<bool> {
         let command = &format!(
             r#"$ErrorActionPreference = "Stop";
-            $vm = Get-Vm -Id {0};
-            if ($null -eq $vm) {{
-                Write-Host "Failed to get vm with Id {0}";
-                exit 1;
-            }}
-            Start-VM -VM $vm"#,
+            $vm = Get-Vm -Id {0} -ErrorAction SilentlyContinue;
+            if ($null -ne $vm) {{
+                Start-VM -VM $vm -WarningAction SilentlyContinue;
+                $true |convertto-json
+            }} else {{
+                $false |convertto-json
+            }}"#,
         vm_id);
 
-        Self::spawn_and_wait(&command)?;
-        Ok(())
+        let stdout = Self::spawn_and_wait(&command)?;
+
+        let vm_found_and_started: bool = serde_json::from_reader(stdout)
+            .map_err(|e| HypervError::new(format!("Failed to parse powershell output: {}", e)))?;
+        
+        Ok(vm_found_and_started)
     }
 
-    pub fn stop_vm(vm_id: &VmId) -> Result<()> {
+    pub fn stop_vm(vm_id: &VmId) -> Result<bool> {
         let command = &format!(
             r#"$ErrorActionPreference = "Stop";
-            $vm = Get-Vm -Id {0};
-            if ($null -eq $vm) {{
-                Write-Host "Failed to get vm with Id {0}";
-                exit 1;
-            }}
-            Stop-VM -VM $vm -Force"#,
+            $vm = Get-Vm -Id {0} -ErrorAction SilentlyContinue;
+            if ($null -ne $vm) {{
+                Stop-VM -VM $vm -Force -WarningAction SilentlyContinue;
+                $true |convertto-json
+            }} else {{
+                $false |convertto-json
+            }}"#,
         vm_id);
 
-        Self::spawn_and_wait(&command)?;
-        Ok(())
+        let stdout = Self::spawn_and_wait(&command)?;
+
+        let vm_found_and_stopped: bool = serde_json::from_reader(stdout)
+            .map_err(|e| HypervError::new(format!("Failed to parse powershell output: {}", e)))?;
+        
+        Ok(vm_found_and_stopped)
     }
 
-    pub fn delete_vm(vm_id: &VmId) -> Result<()> {
+    pub fn delete_vm(vm_id: &VmId) -> Result<bool> {
         let command = &format!(
             r#"$ErrorActionPreference = "Stop";
-            $vm = Get-Vm -Id {0};
-            if ($null -eq $vm) {{
-                Write-Host "Failed to get vm with Id {0}";
-                exit 1;
-            }}
-            Remove-VM -VM $vm -Force"#,
+            $vm = Get-Vm -Id {0} -ErrorAction SilentlyContinue;
+            if ($null -ne $vm) {{
+                Remove-VM -VM $vm -Force -WarningAction SilentlyContinue;
+                $true |convertto-json
+            }} else {{
+                $false |convertto-json
+            }}"#,
         vm_id);
 
-        Self::spawn_and_wait(&command)?;
-        Ok(())
+        let stdout = Self::spawn_and_wait(&command)?;
+
+        let vm_found_and_deleted: bool = serde_json::from_reader(stdout)
+            .map_err(|e| HypervError::new(format!("Failed to parse powershell output: {}", e)))?;
+        
+        Ok(vm_found_and_deleted)
     }
 
     pub fn create_switch<S: AsRef<str>>(name: S, switch_type: &SwitchType<S>) -> Result<Uuid> {
@@ -186,19 +201,24 @@ impl Hyperv {
         Ok(switch_id)
     }
 
-    pub fn delete_switch(switch_id: &str) -> Result<()> {
+    pub fn delete_switch(switch_id: &str) -> Result<bool> {
         let command = &format!(
             r#"$ErrorActionPreference = "Stop";
             $switch = Get-VmSwitch -Id {0};
-            if ($null -eq $switch) {{
-                Write-Host "Failed to get switch with Id {0}";
-                exit 1;
-            }}
-            Remove-VMSwitch -VMSwitch $switch -Force"#,
+            if ($null -ne $switch) {{
+                Remove-VMSwitch -VMSwitch $switch -Force -WarningAction SilentlyContinue;
+                $true |convertto-json
+            }} else {{
+                $false |convertto-json
+            }}"#,
         switch_id);
 
-        Self::spawn_and_wait(&command)?;
-        Ok(())
+        let stdout = Self::spawn_and_wait(&command)?;
+
+        let switch_found_and_deleted: bool = serde_json::from_reader(stdout)
+            .map_err(|e| HypervError::new(format!("Failed to parse powershell output: {}", e)))?;
+
+        Ok(switch_found_and_deleted)
     }
 
     pub fn connect_adapter(vm_id: &VmId, adapter_id: &str, switch_id: &str) -> Result<()> {
