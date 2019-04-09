@@ -204,7 +204,7 @@ impl Hyperv {
     pub fn delete_switch(switch_id: &str) -> Result<bool> {
         let command = &format!(
             r#"$ErrorActionPreference = "Stop";
-            $switch = Get-VmSwitch -Id {0};
+            $switch = Get-VmSwitch -Id {0} -ErrorAction SilentlyContinue;
             if ($null -ne $switch) {{
                 Remove-VMSwitch -VMSwitch $switch -Force -WarningAction SilentlyContinue;
                 $true |convertto-json
