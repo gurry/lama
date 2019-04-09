@@ -34,11 +34,11 @@ impl Hyperv {
         let path = Self::validate_dir_path(path.as_ref())?;
         let command = &format!(
             r#"$ErrorActionPreference = "Stop";
-            $path = "{}";
-            $virtual_machines_path = $path;
-            $virtual_disks_path = Join-Path $path "Virtual Hard Disks";
-            $config_file_path = Get-ChildItem -Path $virtual_machines_path -Filter *.vmcx -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1 | ForEach-Object {{$_.FullName}};
-            $report = Compare-Vm -Path $config_file_path -VirtualMachinePath $virtual_machines_path -VhdDestinationPath $virtual_disks_path -GenerateNewId -Copy;
+            $vm_root_path = "{}";
+            $virtual_machines_path = Join-Path $vm_root_path "Virtual Machines";
+            $virtual_disks_path = Join-Path $vm_root_path "Virtual Hard Disks";
+            $config_file_path = Get-ChildItem -Path $virtual_machines_path -Filter *.vmcx -ErrorAction SilentlyContinue | Select-Object -First 1;
+            $report = Compare-Vm -Path $config_file_path.FullName -VirtualMachinePath $vm_root_path -VhdDestinationPath $virtual_disks_path -GenerateNewId -Copy;
 
             if ($null -eq $report) {{
                 Write-Host "Failed to generate compat report";
