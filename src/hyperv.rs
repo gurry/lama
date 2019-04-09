@@ -89,6 +89,10 @@ impl Hyperv {
                 }}
             }}
 
+            $base_name_to_delete = $config_file_path.BaseName;
+            $filter_to_delete = "*$base_name_to_delete*";
+            Get-ChildItem -Path $virtual_machines_path -Filter $filter_to_delete | Remove-Item;
+
             $output = @{{}};
             $output.VmId = $vm.Id;
             $output.VmName = $vm.Name;
