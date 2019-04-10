@@ -60,7 +60,8 @@ impl Hyperv {
             $report = Compare-Vm -CompatibilityReport $report;
             if ($report.Incompatibilities.Length -gt 0) 
             {{
-                Write-Host "Failed to resolve all incompatilities";
+                Write-Host "Failed to resolve all incompatibilities:";
+                Write-Host ($report.Incompatibilities | Format-Table | Out-String);
                 exit 2;
             }}
 
