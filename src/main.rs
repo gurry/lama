@@ -19,21 +19,25 @@ use pbr::ProgressBar;
 #[derive(Debug, StructOpt)]
 enum Subcommand {
     #[structopt(name = "deploy")]
-    Deploy { path: PathBuf },
+    Deploy { 
+        path: PathBuf,
+        #[structopt(long = "provision")]
+        provisioner_path: Option<PathBuf>
+    },
     #[structopt(name = "drop")]
     Delete { path: PathBuf },
 }
 
 fn main() -> CliResult {
     match Subcommand::from_args() {
-        Subcommand::Deploy { path } => deploy_lab(path)?,
+        Subcommand::Deploy { path, provisioner_path } => deploy_lab(path, provisioner_path)?,
         Subcommand::Delete { path } => delete_lab(path)?,
     }
     
     Ok(())
 }
 
-fn deploy_lab(mut lab_path: PathBuf) -> CliResult {
+fn deploy_lab(mut lab_path: PathBuf, _provisioner_path: Option<PathBuf>) -> CliResult {
     if !lab_path.is_dir() {
         return Err(LamaError::new(format!("Path '{}' does not exist", lab_path.display())))?;
     }
@@ -179,6 +183,36 @@ fn import_lab<P: AsRef<Path>>(path: P) -> CliResult {
     serde_json::to_writer(&mut switches_file, &created_switches)?;
 
     println!("Lab deployed successfully");
+    Ok(())
+}
+
+fn run_provisioner<P: AsRef<Path>>(vm_ids: Vec<VmId>, provisioner_path: P) -> CliResult {
+    // TODO :this is how to implement this method:
+    // 1. For each VM get Get the ipv6 link-local address.
+    // Why ipv6 link-local address? Because a. it is guaranteed
+    // to be there (IPv6 standard requires them to be always present)
+    // and b. they are _almost_ guaranteed to be unique amongst all VMs
+    // on the host machine including those in other labs. The same
+    // can't be said for regular ipv4 addresess. And uniqueness is
+    // important because otherwise you might end up provisioning a
+    // completely wrong VM.
+    // 2. Add this address to the TrustedHosts setting of local WinRM
+    // This is because we'll be communicating with the VM over WinRM
+    // using this IP and as per WinRM requirements you can't communicate
+    // with an IP unless it's added to the TrustedHosts setting.
+    // Before we do this we'd also want to check that the WinRm service
+    // is running on the host machine because otherwise adding to the
+    // TrustedHosts setting is going to fail. If the service isn't there
+    // then fail with an error.
+    // 3. Now run the provision script given at the 'provisioner_path'.
+    // Pass this script the list of all VM objects in this lab and 
+    // their above-mentioned ipv6 link-local addresses. The script will
+    // most likely make a PsSession with the VM and do whatever it wants
+    // to do on it.
+    // See this PR to know how Vagrant people do something similar:
+    // https://github.com/hashicorp/vagrant/pull/4400/files
+    // except that they don't use ipv6 link-local addresses like us.
+
     Ok(())
 }
 
